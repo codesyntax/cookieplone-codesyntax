@@ -1,0 +1,21 @@
+{
+  "version": "1.0",
+  "title": "CodeSyntax cookiecutter template customization",
+  "extends": {
+    "url": "gh:plone/cookieplone-templates",
+    "tag": "unify-sub-project-settings"
+  },
+  "templates": {
+    "project": {
+      "title": "CUSTOM PROJECT AT CODESYNTAX",
+      "description": "CUSTOM PROJECT DESCRIPTION",
+      "path": "./templates/project"
+    },
+    "sub/project_settings": {
+      "path": "./templates/sub/project_settings",
+      "title": "Project settings to be applied on top of a Plone 6 project",
+      "description": "Subtemplate with configuration and settings for a Plone 6 project.",
+      "hidden": true
+    }
+  }
+}

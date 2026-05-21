@@ -1,0 +1,176 @@
+#
+# Nginx configuration to be used when we are using custom client provided certificates
+#
+# Reminders:
+#
+#  - Create a new folder to save the certificates
+#  - Remove Caddy from the docker-compose fileº
+#  - Set nginx container to listen on 80 and 443 ports
+#
+
+upstream backendproxy {
+    server backend:8080;
+}
+
+{%- if cookiecutter.feature_headless %}
+upstream frontendproxy {
+    server frontend:3000;
+}
+
+    {%- if cookiecutter.devops_cache %}
+upstream varnishproxy_frontend {
+    server varnish-frontend:80;
+}
+    {%- endif %}
+
+{%- endif %}
+
+{%- if cookiecutter.devops_cache %}
+
+upstream varnishproxy_backend {
+    server varnish-backend:80;
+}
+{%- endif %}
+
+#log_format proxied '$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent"';
+log_format json_combined escape=json '{'
+#    '"remote_ip":"$http_x_forwarded_for",'
+    '"time_local":"$time_local",'
+    '"remote_addr":"$http_x_forwarded_for",'
+    '"request":"$request",'
+    '"status": "$status",'
+    '"body_bytes_sent":"$body_bytes_sent",'
+    '"http_referer":"$http_referer",'
+    '"http_user_agent":"$http_user_agent",'
+    '"request_time":"$request_time"'
+'}';
+
+access_log  off;
+error_log  /var/log/nginx/error.log;
+
+server {
+    listen 443 ssl;
+    server_name ${SERVER_DOMAIN};
+    access_log  /var/log/nginx/access.log json_combined;
+
+    # This is the certificate with all the certificate chain (all certificates in one file)
+    ssl_certificate /ssl/certificate.pem;
+    # This is the private key for the certificate
+    ssl_certificate_key /ssl/certificate.key;
+
+    # modern configuration
+    ssl_protocols TLSv1.3;
+    ssl_ecdh_curve X25519:prime256v1:secp384r1;
+    ssl_prefer_server_ciphers off;
+
+    # uncomment to enable if ssl_protocols includes TLSv1.2 or earlier;
+    # see also ssl_session_ticket_key alternative to stateful session cache
+    #ssl_session_timeout 1d;
+    #ssl_session_cache shared:MozSSL:10m;  # about 40000 sessions
+
+    # OCSP stapling
+    ssl_stapling on;
+    ssl_stapling_verify on;
+
+    # verify chain of trust of OCSP response using Root CA and Intermediate certs
+    # ssl_trusted_certificate /path/to/root_CA_cert_plus_intermediates;
+
+    # replace with the IP address of your resolver;
+    # async 'resolver' is important for proper operation of OCSP stapling
+    resolver 1.1.1.1;
+
+    add_header Referrer-Policy same-origin;
+
+    # Extra Headers
+    add_header X-Content-Type-Options nosniff;
+    add_header X-Frame-Options SAMEORIGIN always;
+
+    # Block pages from loading when they detect reflected XSS attacks
+    add_header X-XSS-Protection "1; mode=block";
+
+    gzip            on;
+    gzip_min_length 1000;
+    gzip_types      application/javascript application/json application/rss+xml application/x-javascript application/xhtml+xml application/xml application/xml+rss text/css text/html text/javascript text/plain text/xml;
+
+    client_max_body_size 20M;
+
+    {%- if cookiecutter.feature_headless %}
+
+        location ~ /api/\+\+resource\+\+zmi/ {
+            rewrite ^/(.*)$ /VirtualHostBase/https/${SERVER_DOMAIN}:443/Plone/VirtualHostRoot/_vh_api$1 break;
+            # Directly Zope
+            proxy_pass http://backendproxy;
+        }
+
+        # return 301 https://$host$request_uri;
+        location ~ /api($|/.*) {
+            rewrite ^/api($|/.*) /VirtualHostBase/https/${SERVER_DOMAIN}:443/Plone/VirtualHostRoot/_vh_api$1 break;
+            {%- if cookiecutter.devops_cache %}
+            proxy_pass http://varnishproxy_backend;
+            {%- else %}
+            proxy_pass http://backendproxy;
+            {%- endif %}
+        }
+
+        location ~ /\+\+api\+\+($|/.*) {
+            rewrite ^/\+\+api\+\+($|/.*) /VirtualHostBase/https/${SERVER_DOMAIN}:443/Plone/++api++/VirtualHostRoot/$1 break;
+            {%- if cookiecutter.devops_cache %}
+            proxy_pass http://varnishproxy_backend;
+            {%- else %}
+            proxy_pass http://backendproxy;
+            {%- endif %}
+        }
+    {%- endif %}
+
+    location ~ / {
+
+        {%- if cookiecutter.feature_headless %}
+        # Comment this 2 sections when using Classic UI Plone
+        location ~* \.(js|jsx|css|less|swf|eot|ttf|otf|woff|woff2)$ {
+            add_header Cache-Control "public";
+            expires +1y;
+            {%- if cookiecutter.devops_cache %}
+            proxy_pass http://varnishproxy_frontend;
+            {%- else %}
+            proxy_pass http://frontendproxy;
+            {%- endif %}
+        }
+        location ~* static.*\.(ico|jpg|jpeg|png|gif|svg)$ {
+            add_header Cache-Control "public";
+            expires +1y;
+            {%- if cookiecutter.devops_cache %}
+            proxy_pass http://varnishproxy_frontend;
+            {%- else %}
+            proxy_pass http://frontendproxy;
+            {%- endif %}
+        }
+        {%- endif %}
+
+        proxy_set_header        Host $host;
+        proxy_set_header        X-Real-IP $remote_addr;
+        proxy_set_header        X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header        X-Forwarded-Proto $scheme;
+
+        {%- if cookiecutter.feature_headless %}
+            {%- if cookiecutter.devops_cache %}
+        proxy_pass http://varnishproxy_frontend;
+            {%- else %}
+        proxy_pass http://frontendproxy;
+            {%- endif %}
+
+        {%- else %}
+        rewrite ^/(.*)$ /VirtualHostBase/https/${SERVER_DOMAIN}:443/Plone/VirtualHostRoot/$1 break;
+            {%- if cookiecutter.devops_cache %}
+        proxy_pass http://varnishproxy_backend;
+            {%- else %}
+        proxy_pass http://backendproxy;
+            {%- endif %}
+        {%- endif %}
+    }
+}
+
+server {
+    listen 80;
+    server_name ${SERVER_DOMAIN};
+    return 301 https://${SERVER_DOMAIN}$request_uri;
+}

@@ -1,0 +1,42 @@
+services:
+
+  {%- if cookiecutter.devops_storage == 'relstorage' %}
+  postgres:
+    # Default: postgres:17 (tsvector ranking, no extensions needed)
+    # For BM25: PG_IMAGE=tensorchord/vchord-suite:pg17-latest docker compose up -d
+    image: ${PG_IMAGE:-postgres:17}
+    environment:
+      POSTGRES_USER: zodb
+      POSTGRES_PASSWORD: zodb
+      POSTGRES_DB: zodb
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "zodb"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  adminer:
+    image: adminer
+    ports:
+      - "8090:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  {%- if cookiecutter.devops_cache %}
+  thumbor:
+    image: ghcr.io/bluedynamics/zodb-pgjsonb-thumborblobloader:0.4.2
+    environment:
+      PGTHUMBOR_DSN: "dbname=zodb user=zodb password=zodb host=postgres"
+      THUMBOR_SECURITY_KEY: "secret"
+      ALLOW_UNSAFE_URL: "True"
+      PGTHUMBOR_PLONE_AUTH_URL: "http://plone.127.0.0.1.nip.io:8080/Plone"
+      PGTHUMBOR_AUTH_CACHE_TTL: "60"
+    ports:
+      - 8888:8888
+  {%- endif %}
+  {%- endif %}

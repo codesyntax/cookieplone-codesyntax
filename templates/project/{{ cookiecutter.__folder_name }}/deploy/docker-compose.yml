@@ -1,0 +1,198 @@
+services:
+  backend:
+    container_name: backend
+    restart: unless-stopped
+    {%- if cookiecutter.postgres %}
+    depends_on:
+      - postgres
+    {%- else %}
+    depends_on:
+      - zeo
+    {%- endif %}
+    environment:
+    {%- if cookiecutter.postgres %}
+      ZODB_PGJSONB_DSN: dbname='${DB_NAME:-zodb}' user='${DB_USER:-zodb}' password='${DB_PASSWORD:-zodb}' host='${DB_HOST:-postgres}'
+      ZODB_PGJSONB_HISTORY_PRESERVING: true
+      {%- if cookiecutter.thumbor %}
+      PGTHUMBOR_SECURITY_KEY: {{ cookiecutter.security_key }}
+      PGTHUMBOR_SERVER_URL: https://{{cookiecutter.hostname}}/thumbor/
+      {%- endif %}
+    {%- else %}
+      ZEO_ADDRESS: zeo:8100
+      ZEO_SHARED_BLOB_DIR: true
+    {%- endif %}
+      ZOPE_FORM_MEMORY_LIMIT: 100MB
+      ZOPE_FORM_DISK_LIMIT: 100MB
+      ZOPE_FORM_MEMFILE_LIMIT: 100MB
+      CLIENT_HOME: /app/
+      PLONE_REGISTRY_YAML: /plone-conf/plone.yml
+
+    volumes:
+      - ./data/zeo:/data
+      - ./plone-conf:/plone-conf
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    image: {{ cookiecutter.__container_image_prefix }}/backend:$VERSION
+    ports:
+      - 8080:8080
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://prometheus.codesyntax.com:3100/loki/api/v1/push"
+
+  caddy:
+    container_name: caddy
+    restart: unless-stopped
+    image: caddy
+    ports:
+      - 80:80
+      - 443:443
+      - 443:443/udp
+    volumes:
+      - ./conf/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://prometheus.codesyntax.com:3100/loki/api/v1/push"
+
+{%- if cookiecutter.feature_headless %}
+  frontend:
+    container_name: frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      RAZZLE_API_PATH: https://{{ cookiecutter.hostname }}
+      RAZZLE_INTERNAL_API_PATH: http://backend:8080/Plone
+
+    image: {{ cookiecutter.__container_image_prefix }}/frontend:$VERSION
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://prometheus.codesyntax.com:3100/loki/api/v1/push"
+{%- endif %}
+
+
+{%- if cookiecutter.postgres %}
+  postgres:
+    # Default: postgres:17 (tsvector ranking, no extensions needed)
+    # For BM25: PG_IMAGE=tensorchord/vchord-suite:pg17-latest docker compose up -d
+    image: ${PG_IMAGE:-postgres:17}
+    environment:
+      POSTGRES_USER: zodb
+      POSTGRES_PASSWORD: zodb
+      POSTGRES_DB: zodb
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "zodb"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+
+  {%- if cookiecutter.thumbor %}
+  thumbor:
+    depends_on:
+      - postgres
+    image: ghcr.io/bluedynamics/zodb-pgjsonb-thumborblobloader:0.4.2
+    environment:
+      PGTHUMBOR_DSN: "dbname=zodb user=zodb password=zodb host=postgres"
+      THUMBOR_SECURITY_KEY: "{{ cookiecutter.security_key }}"
+      ALLOW_UNSAFE_URL: "True"
+      PGTHUMBOR_PLONE_AUTH_URL: "{{ cookiecutter.hostname }}"
+      PGTHUMBOR_AUTH_CACHE_TTL: "60"
+  {%- endif %}
+
+{%- else %}
+  zeo:
+    container_name: zeo
+    restart: unless-stopped
+    image: plone/plone-zeo:6.0.0
+    volumes:
+      - ./data/zeo:/data
+    environment:
+      ZEO_PACK_KEEP_OLD: false
+
+{%- endif %}
+
+  nginx:
+    container_name: nginx
+    restart: unless-stopped
+    depends_on:
+      - backend
+      {%- if cookiecutter.feature_headless %}
+      - frontend
+      {%- endif %}
+    environment:
+      SERVER_DOMAIN: {{ cookiecutter.hostname }}
+    image: nginx
+    volumes:
+      - ./conf/default.conf.template:/etc/nginx/templates/default.conf.template
+      - ./conf/nginx-config-extra.conf:/etc/nginx/conf/nginx-config-extra.conf
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://prometheus.codesyntax.com:3100/loki/api/v1/push"
+
+  {%- if cookiecutter.devops_cache %}
+    {%- if cookiecutter.feature_headless %}
+  varnish-frontend:
+    container_name: varnish-frontend
+    restart: unless-stopped
+    ports:
+      - 3080:80
+    image: varnish:6.0
+    volumes:
+      - ./conf/varnish_frontend.vcl:/etc/varnish/default.vcl
+    depends_on:
+      - frontend
+    {%- endif %}
+
+  varnish-backend:
+    container_name: varnish-backend
+    restart: unless-stopped
+    ports:
+      - 4080:80
+    image: varnish:6.0
+    volumes:
+      - ./conf/varnish_backend.vcl:/etc/varnish/default.vcl
+    depends_on:
+      - backend
+  {%- endif %}
+
+#  scripts:
+#    profiles:
+#      - tools
+#    build:
+#      context: ../scripts
+#    image: import_scripts
+#    container_name: scripts
+#    volumes:
+#      - /var/run/docker.sock:/var/run/docker.sock
+
+  cron-runner:
+    image: ghcr.io/codesyntax/cron-runner:latest
+    container_name: cron-runner
+    restart: unless-stopped
+    volumes:
+      - ./docker-crontab.txt:/crontab.txt:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://prometheus.codesyntax.com:3100/loki/api/v1/push"
+
+volumes:
+  caddy_config: null
+  caddy_data: null
+  vol-site-data:
+    driver_opts:
+      device: ./data/db/
+      o: bind
+      type: none

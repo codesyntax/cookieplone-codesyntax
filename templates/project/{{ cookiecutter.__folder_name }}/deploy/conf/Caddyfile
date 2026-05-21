@@ -1,0 +1,58 @@
+{{cookiecutter.hostname}}:443 {
+
+    encode zstd gzip
+
+    # Protect the whole site with a password
+    #
+    # Generate password running the following command
+    # docker run --rm -it caddy caddy hash-password admin
+    #
+    # Replace XXXXXXXXX with the output of the command
+    #
+    # Then uncomment the following and release a new version
+
+    # basic_auth /* {
+    #    admin XXXXXXXXXXX
+    # }
+
+
+    {%- if cookiecutter.feature_headless %}
+    # Generate password running the following command:
+    # docker run --rm -it caddy caddy hash-password admin
+    basic_auth /api* {
+        admin XXXXXXXXXXX
+    }
+    {%- endif %}
+
+    # Set the backend server URL
+    reverse_proxy * http://nginx:80 {
+        header_up Host {http.request.host}
+        header_up X-Forwarded-Proto {http.request.scheme}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+    }
+
+    # Logging (optional)
+    log {
+        output stdout
+        format console
+    }
+
+    tls certs@codesyntax.com {
+        protocols tls1.2 tls1.3
+    }
+
+    # HSTS (63072000 seconds)
+    header Strict-Transport-Security "max-age=63072000"
+
+}
+
+# Adjust to remove the www or put it
+# {{cookiecutter.hostname}}:443 {
+#
+#     tls certs@codesyntax.com {
+#         protocols tls1.2 tls1.3
+#     }
+#
+#     redir https://{{cookiecutter.hostname}}{uri}
+# }

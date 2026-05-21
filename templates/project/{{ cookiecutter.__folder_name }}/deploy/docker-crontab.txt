@@ -1,0 +1,10 @@
+# Remember to add " > /proc/1/fd/1 2>&1" to each cron job to get the cron logs
+@weekly docker exec backend ./docker-entrypoint.sh pack > /proc/1/fd/1 2>&1
+
+# Example of running a script in the scripts container
+# 0 1 * * * docker run --rm import_scripts your_python_script.py > /proc/1/fd/1 2>&1
+# 0 1 * * * docker run --rm import_scripts your_bash_script.sh > /proc/1/fd/1 2>&1
+
+# Example of running a Plone script that lives inside the backend container
+ENVS="-e SECURITY_POLICY_IMPLEMENTATION=C -e VERBOSE_SECURITY=off -e DEFAULT_ZPUBLISHER_ENCODING=utf-8 -e ZODB_CACHE_SIZE=30000 -e ZEO_READ_ONLY=false -e ZEO_CLIENT_READ_ONLY_FALLBACK=false -e ZEO_STORAGE=1 -e ZEO_CLIENT_CACHE_SIZE=128MB -e ZEO_DROP_CACHE_RATHER_VERIFY=false"
+# @daily docker exec $ENVS backend /app/bin/zconsole run /app/etc/zeo.conf /app/scripts/send_modifications_emails.py > /proc/1/fd/1 2>&1

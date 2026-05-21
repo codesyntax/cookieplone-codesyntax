@@ -1,0 +1,16 @@
+{
+  "schema": {
+    "properties": {
+      "domain": {
+        "type": "string",
+        "default": "{{ hostname }}",
+        "format": "computed"
+      },
+      "image_prefix": {
+        "type": "string",
+        "default": "ghcr.io/codesyntax",
+        "format": "computed"
+      }
+    }
+  }
+}

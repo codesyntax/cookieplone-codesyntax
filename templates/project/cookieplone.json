@@ -1,0 +1,113 @@
+{
+  "schema": {
+    "properties": {
+      "author": {
+        "title": "Author",
+        "default": "CodeSyntax",
+        "type": "string",
+        "format": "computed"
+      },
+      "email": {
+        "title": "E-mail",
+        "default": "plone@codesyntax.com",
+        "type": "string",
+        "format": "computed"
+      },
+      "github_organization": {
+        "title": "GitHub Username or Organization",
+        "default": "codesyntax",
+        "type": "string",
+        "format": "computed"
+      },
+      "feature_headless": {
+        "type": "boolean",
+        "title": "Use Volto?",
+        "description": "",
+        "default": true,
+        "validator": ""
+      },
+      "initialize_ci": {
+        "type": "boolean",
+        "title": "Add CI configuration?",
+        "description": "",
+        "default": false,
+        "format": "computed"
+      },
+      "initialize_documentation": {
+        "type": "boolean",
+        "title": "Add documentation scaffold?",
+        "description": "Generate a Sphinx-based documentation structure using the Plone documentation starter.",
+        "default": true,
+        "format": "computed"
+      },
+      "container_registry": {
+        "type": "string",
+        "title": "Container Registry",
+        "description": "Container registry where Docker images will be published.",
+        "default": "gitlab",
+        "format": "computed"
+      },
+      "devops_storage": {
+        "type": "string",
+        "title": "Which persistent storage to use in the deployment stack?",
+        "description": "Backend storage strategy for the ZODB database in the deployment stack.",
+        "default": "filestorage",
+        "format": "computed"
+      },
+      "devops_ansible": {
+        "type": "boolean",
+        "title": "Add Ansible playbooks?",
+        "description": "Include Ansible playbooks for server provisioning and deployment.",
+        "default": false,
+        "validator": "",
+        "format": "computed"
+      },
+      "devops_gha_deploy": {
+        "type": "boolean",
+        "title": "Add GitHub Action to Deploy this project?",
+        "description": "Include a GitHub Actions workflow for automated deployment to a Docker Swarm cluster.",
+        "default": false,
+        "validator": "",
+        "format": "computed"
+      },
+      "postgres": {
+        "type": "boolean",
+        "title": "Use Postgres?",
+        "default": false
+      },
+      "thumbor": {
+        "type": "boolean",
+        "title": "Use Thumbor?",
+        "default": false
+      },
+      "security_key": {
+        "type": "string",
+        "title": "Security Key",
+        "default": "{{ random_ascii_string(32) }}",
+        "format": "computed"
+      }
+    },
+    "allOf": [
+      {
+        "if": {
+          "properties": {
+            "postgres": {
+              "const": true
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "thumbor": {
+              "type": "boolean",
+              "title": "Should we use Thumbor for image scale generation?",
+              "description": "",
+              "default": false,
+              "validator": ""
+            }
+          }
+        }
+      }
+    ]
+  }
+}
