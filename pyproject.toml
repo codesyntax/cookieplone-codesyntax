@@ -2,6 +2,7 @@
 name = "cookieplone-codesyntax"
 version = "0.1.0"
 description = "CodeSyntax cookiecutter template customization"
+requires-python = ">=3.10"
 dependencies = []
 
 [dependency-groups]
