@@ -1,0 +1,14 @@
+[project]
+name = "cookieplone-codesyntax"
+version = "0.1.0"
+description = "CodeSyntax cookiecutter template customization"
+dependencies = []
+
+[dependency-groups]
+test = [
+    "cookieplone @ git+https://github.com/plone/cookieplone.git@issue-189-pytest-fixtures-extends",
+    "pytest",
+]
+
+[tool.uv]
+default-groups = ["test"]
