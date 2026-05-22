@@ -106,12 +106,7 @@
         "title": "Use Postgres?",
         "default": false
       },
-      "thumbor": {
-        "type": "boolean",
-        "title": "Use Thumbor?",
-        "default": false,
-        "format": "computed"
-      },
+
       "security_key": {
         "type": "string",
         "title": "Security Key",
