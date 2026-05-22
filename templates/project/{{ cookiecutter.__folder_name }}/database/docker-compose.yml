@@ -1,8 +1,7 @@
 services:
 
-  {%- if cookiecutter.devops_storage == 'relstorage' %}
-  postgres:
-    # Default: postgres:17 (tsvector ranking, no extensions needed)
+  {%- if cookiecutter.postgres %}
+  postgres: postgres:17 (tsvector ranking, no extensions needed)
     # For BM25: PG_IMAGE=tensorchord/vchord-suite:pg17-latest docker compose up -d
     image: ${PG_IMAGE:-postgres:17}
     environment:
@@ -27,7 +26,7 @@ services:
       postgres:
         condition: service_healthy
 
-  {%- if cookiecutter.devops_cache %}
+  {%- if cookiecutter.thumbor %}
   thumbor:
     image: ghcr.io/bluedynamics/zodb-pgjsonb-thumborblobloader:0.4.2
     environment:

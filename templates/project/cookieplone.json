@@ -1,6 +1,14 @@
 {
   "schema": {
     "properties": {
+      "description": {
+        "type": "string",
+        "title": "Description",
+        "description": "A short description of your add-on.",
+        "default": "A new Plone project for {{ cookiecutter.title }}",
+        "validator": "",
+        "format": "computed"
+      },
       "author": {
         "title": "Author",
         "default": "CodeSyntax",
@@ -12,6 +20,29 @@
         "default": "plone@codesyntax.com",
         "type": "string",
         "format": "computed"
+      },
+      "hostname": {
+        "type": "string",
+        "title": "Hostname",
+        "description": "Public URL of the server.",
+        "default": "{{ cookiecutter.folder_name }}.korpoweb.com",
+        "validator": "",
+        "format": "computed"
+      },
+      "use_prerelease_versions": {
+        "type": "string",
+        "title": "Should we use prerelease versions?",
+        "description": "Whether to include alpha, beta, and release candidate versions when resolving the Plone version.",
+        "default": false,
+        "validator": "",
+        "format": "computed"
+      },
+      "plone_version": {
+        "type": "string",
+        "title": "Plone Version",
+        "description": "Plone backend version to use. Automatically resolved to the latest available release.",
+        "default": "{{ false | latest_plone }}",
+        "validator": "cookieplone.validators.plone_version"
       },
       "github_organization": {
         "title": "GitHub Username or Organization",
@@ -78,12 +109,37 @@
       "thumbor": {
         "type": "boolean",
         "title": "Use Thumbor?",
-        "default": false
+        "default": false,
+        "format": "computed"
       },
       "security_key": {
         "type": "string",
         "title": "Security Key",
         "default": "{{ random_ascii_string(32) }}",
+        "format": "computed"
+      },
+      "volto_version": {
+        "type": "string",
+        "title": "Volto Version",
+        "description": "Volto frontend version to use. Automatically resolved to the latest available release.",
+        "default": "19.0.0",
+        "validator": "cookieplone.validators.volto_version",
+        "format": "computed"
+      },
+      "frontend_addon_name": {
+        "type": "string",
+        "title": "Volto Addon Name",
+        "description": "Name of the Volto frontend add-on package (e.g. volto-myproject).",
+        "default": "volto-{{ cookiecutter.python_package_name|replace('_', '-')|replace('.', '-') }}",
+        "validator": "cookieplone.validators.npm_package_name",
+        "format": "computed"
+      },
+      "language_code": {
+        "type": "string",
+        "title": "Language",
+        "description": "Default language for the Plone site.",
+        "default": "en",
+        "validator": "cookieplone.validators.language_code",
         "format": "computed"
       }
     },

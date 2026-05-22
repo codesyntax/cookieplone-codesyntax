@@ -7,8 +7,8 @@
   },
   "templates": {
     "project": {
-      "title": "CUSTOM PROJECT AT CODESYNTAX",
-      "description": "CUSTOM PROJECT DESCRIPTION",
+      "title": "CodeSyntax's Plone projects",
+      "description": "Plone projects with sane defaults for CodeSyntax",
       "path": "./templates/project"
     },
     "sub/project_settings": {
