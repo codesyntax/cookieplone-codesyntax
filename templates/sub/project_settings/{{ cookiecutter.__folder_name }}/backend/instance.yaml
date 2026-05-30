@@ -9,6 +9,8 @@ default_context:
     {%- if cookiecutter.postgres %}
     db_storage: 'pgjsonb'
     db_pgjsonb_dsn: "dbname='zodb' user='zodb' password='zodb' host='localhost' port='5433'"
+    db_pgjsonb_history_preserving: true
+
     environment:
       PGTHUMBOR_SECURITY_KEY: {{ cookiecutter.security_key }}
       PGTHUMBOR_SERVER_URL: "http://thumbor.127.0.0.1.nip.io:8888"
