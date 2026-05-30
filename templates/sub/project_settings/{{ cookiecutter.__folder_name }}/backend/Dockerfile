@@ -1,9 +1,6 @@
 # syntax=docker/dockerfile:1
-ARG PYTHON_VERSION=3.12
+ARG PYTHON_VERSION={{ cookiecutter.__python_version }}
 FROM plone/server-builder:uv-${PYTHON_VERSION} AS builder
-
-RUN apt-get update && apt-get install -y openssh-client git
-RUN mkdir -p ~/.ssh && echo "Host *\\n\\tStrictHostKeyChecking no\\n\\n" > ~/.ssh/config
 
 # Install project dependencies based on uv.lock and pyproject.toml
 # We expect pyproject.toml to have an entry cointainer inside [dependency-groups]

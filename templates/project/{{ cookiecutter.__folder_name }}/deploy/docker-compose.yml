@@ -78,8 +78,10 @@ services:
 
 {%- if cookiecutter.postgres %}
   postgres:
-    # Default: postgres:17 (tsvector ranking, no extensions needed)
-    # For BM25: PG_IMAGE=tensorchord/vchord-suite:pg17-latest docker compose up -d
+    # HINT:
+    # - Using the postgres:17 image, you will have tsvector based search
+    # - Using the tensorchord/vchord-suite:pg17-latest image, you will have BM25 ranking
+    # You can set the value here or in the .env file
     image: ${PG_IMAGE:-postgres:17}
     environment:
       POSTGRES_USER: zodb

@@ -3,79 +3,61 @@
     "properties": {
       "description": {
         "type": "string",
-        "title": "Description",
-        "description": "A short description of your add-on.",
-        "default": "A new Plone project for {{ cookiecutter.title }}",
+        "title": "Project Description",
+        "description": "Short summary of the project, used in package metadata and README.",
+        "default": "A new project using Plone 6.",
         "validator": "",
-        "format": "computed"
-      },
-      "author": {
-        "title": "Author",
-        "default": "CodeSyntax",
-        "type": "string",
-        "format": "computed"
-      },
-      "email": {
-        "title": "E-mail",
-        "default": "plone@codesyntax.com",
-        "type": "string",
         "format": "computed"
       },
       "hostname": {
         "type": "string",
-        "title": "Hostname",
-        "description": "Public URL of the server.",
-        "default": "{{ cookiecutter.folder_name }}.korpoweb.com",
+        "title": "Project URL (without protocol)",
+        "description": "The hostname where the project will be deployed (e.g. mysite.example.com).",
+        "default": "{{ cookiecutter.project_slug }}.korpoweb.com",
+        "validator": "cookieplone.validators.hostname",
+        "format": "computed"
+      },
+      "author": {
+        "type": "string",
+        "title": "Author",
+        "description": "Name of the project author or organization.",
+        "default": "CodeSyntax",
         "validator": "",
         "format": "computed"
       },
-      "use_prerelease_versions": {
+      "email": {
         "type": "string",
-        "title": "Should we use prerelease versions?",
-        "description": "Whether to include alpha, beta, and release candidate versions when resolving the Plone version.",
-        "default": false,
+        "title": "Author E-mail",
+        "description": "Contact email for the project author.",
+        "default": "plone@codesyntax.com",
         "validator": "",
         "format": "computed"
       },
-      "plone_version": {
+
+      "language_code": {
         "type": "string",
-        "title": "Plone Version",
-        "description": "Plone backend version to use. Automatically resolved to the latest available release.",
-        "default": "{{ false | latest_plone }}",
-        "validator": "cookieplone.validators.plone_version"
+        "title": "Language",
+        "description": "Default language for the Plone site.",
+        "default": "eu",
+        "validator": "cookieplone.validators.language_code",
+        "format": "computed"
+
       },
       "github_organization": {
-        "title": "GitHub Username or Organization",
-        "default": "codesyntax",
         "type": "string",
+        "title": "GitHub or GitLab username or organization slug from URL",
+        "description": "Organization or username used to build the repository URL and container image paths.",
+        "default": "codesyntax",
+        "validator": "",
         "format": "computed"
-      },
-      "feature_headless": {
-        "type": "boolean",
-        "title": "Use Volto?",
-        "description": "",
-        "default": true,
-        "validator": ""
-      },
-      "initialize_ci": {
-        "type": "boolean",
-        "title": "Add CI configuration?",
-        "description": "",
-        "default": false,
-        "format": "computed"
-      },
-      "initialize_documentation": {
-        "type": "boolean",
-        "title": "Add documentation scaffold?",
-        "description": "Generate a Sphinx-based documentation structure using the Plone documentation starter.",
-        "default": true,
-        "format": "computed"
+
       },
       "container_registry": {
         "type": "string",
         "title": "Container Registry",
         "description": "Container registry where Docker images will be published.",
         "default": "gitlab",
+        "validator": "",
         "format": "computed"
       },
       "devops_storage": {
@@ -83,7 +65,17 @@
         "title": "Which persistent storage to use in the deployment stack?",
         "description": "Backend storage strategy for the ZODB database in the deployment stack.",
         "default": "filestorage",
+        "validator": "",
         "format": "computed"
+      },
+      "devops_cache": {
+        "type": "boolean",
+        "title": "Should we setup a caching server?",
+        "description": "Include a Varnish caching layer in front of the backend.",
+        "default": true,
+        "validator": "",
+        "format": "computed"
+
       },
       "devops_ansible": {
         "type": "boolean",
@@ -92,6 +84,7 @@
         "default": false,
         "validator": "",
         "format": "computed"
+
       },
       "devops_gha_deploy": {
         "type": "boolean",
@@ -100,41 +93,26 @@
         "default": false,
         "validator": "",
         "format": "computed"
+
+      },
+      "initialize_documentation": {
+        "type": "boolean",
+        "title": "Would you like to add a documentation scaffold to your project?",
+        "description": "Generate a Sphinx-based documentation structure using the Plone documentation starter.",
+        "default": true,
+        "validator": "",
+        "format": "computed"
+
       },
       "postgres": {
         "type": "boolean",
         "title": "Use Postgres?",
         "default": false
       },
-
       "security_key": {
         "type": "string",
         "title": "Security Key",
         "default": "{{ random_ascii_string(32) }}",
-        "format": "computed"
-      },
-      "volto_version": {
-        "type": "string",
-        "title": "Volto Version",
-        "description": "Volto frontend version to use. Automatically resolved to the latest available release.",
-        "default": "19.0.0",
-        "validator": "cookieplone.validators.volto_version",
-        "format": "computed"
-      },
-      "frontend_addon_name": {
-        "type": "string",
-        "title": "Volto Addon Name",
-        "description": "Name of the Volto frontend add-on package (e.g. volto-myproject).",
-        "default": "volto-{{ cookiecutter.python_package_name|replace('_', '-')|replace('.', '-') }}",
-        "validator": "cookieplone.validators.npm_package_name",
-        "format": "computed"
-      },
-      "language_code": {
-        "type": "string",
-        "title": "Language",
-        "description": "Default language for the Plone site.",
-        "default": "en",
-        "validator": "cookieplone.validators.language_code",
         "format": "computed"
       }
     },

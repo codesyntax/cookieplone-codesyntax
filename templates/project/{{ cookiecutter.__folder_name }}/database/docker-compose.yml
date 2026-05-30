@@ -1,8 +1,10 @@
 services:
 
   {%- if cookiecutter.postgres %}
-  postgres: postgres:17 (tsvector ranking, no extensions needed)
-    # For BM25: PG_IMAGE=tensorchord/vchord-suite:pg17-latest docker compose up -d
+  postgres:
+    # HINT:
+    # - Using the postgres:17 image, you will have tsvector based search
+    # - Using the tensorchord/vchord-suite:pg17-latest image, you will have BM25 ranking
     image: ${PG_IMAGE:-postgres:17}
     environment:
       POSTGRES_USER: zodb
@@ -31,7 +33,7 @@ services:
     image: ghcr.io/bluedynamics/zodb-pgjsonb-thumborblobloader:0.4.2
     environment:
       PGTHUMBOR_DSN: "dbname=zodb user=zodb password=zodb host=postgres"
-      THUMBOR_SECURITY_KEY: "secret"
+      THUMBOR_SECURITY_KEY: "{{ cookiecutter.security_key }}"
       ALLOW_UNSAFE_URL: "True"
       PGTHUMBOR_PLONE_AUTH_URL: "http://plone.127.0.0.1.nip.io:8080/Plone"
       PGTHUMBOR_AUTH_CACHE_TTL: "60"

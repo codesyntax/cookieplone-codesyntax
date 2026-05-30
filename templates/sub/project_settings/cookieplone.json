@@ -1,14 +1,23 @@
 {
   "schema": {
     "properties": {
-      "domain": {
-        "type": "string",
-        "default": "{{ hostname }}",
+      "postgres": {
+        "type": "boolean",
+        "title": "Use Postgres?",
+        "default": false,
         "format": "computed"
       },
-      "image_prefix": {
+      "thumbor": {
+        "type": "boolean",
+        "title": "Should we use Thumbor for image scale generation?",
+        "description": "",
+        "default": false,
+        "validator": ""
+      },
+      "security_key": {
         "type": "string",
-        "default": "ghcr.io/codesyntax",
+        "title": "Security Key",
+        "default": "{{ random_ascii_string(32) }}",
         "format": "computed"
       }
     }

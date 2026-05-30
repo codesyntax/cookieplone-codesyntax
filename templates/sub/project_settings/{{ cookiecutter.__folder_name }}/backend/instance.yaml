@@ -1,0 +1,16 @@
+# Configuration for https://github.com/plone/cookiecutter-zope-instance
+
+default_context:
+    initial_user_password: 'admin'
+    zcml_package_includes: '{{ cookiecutter.python_package_name }}'
+    wsgi_listen: '0.0.0.0:8080'
+    debug_mode: true
+    verbose_security: true
+    {%- if cookiecutter.postgres %}
+    db_storage: 'pgjsonb'
+    db_pgjsonb_dsn: "dbname='zodb' user='zodb' password='zodb' host='localhost' port='5433'"
+    environment:
+      PGTHUMBOR_SECURITY_KEY: {{ cookiecutter.security_key }}
+      PGTHUMBOR_SERVER_URL: "http://thumbor.127.0.0.1.nip.io:8888"
+    {%- endif %}
+
