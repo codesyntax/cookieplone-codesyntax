@@ -15,16 +15,7 @@ versions: dict | OrderedDict = {{versions}}
 
 POST_GEN_TO_REMOVE: dict[str, list[str]] = {
     "devops": [
-        "devops/.env_dist",
-        "devops/.gitignore",
-        "devops/ansible.cfg",
-        "devops/etc",
-        "devops/inventory",
-        "devops/Makefile",
-        "devops/playbooks",
-        "devops/requirements",
-        "devops/tasks",
-        "devops/README.md",
+        "devops",
     ],
 }
 
