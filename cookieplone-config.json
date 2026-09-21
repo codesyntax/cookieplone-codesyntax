@@ -3,7 +3,7 @@
   "title": "CodeSyntax cookiecutter template customization",
   "extends": {
     "url": "gh:plone/cookieplone-templates",
-    "tag": "unify-sub-project-settings"
+    "branch": "main"
   },
   "templates": {
     "project": {
