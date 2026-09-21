@@ -2,7 +2,7 @@
   "version": "1.0",
   "title": "CodeSyntax cookiecutter template customization",
   "extends": {
-    "url": "gh:plone/cookieplone-templates"
+    "url": "https://github.com/plone/cookieplone-templates"
   },
   "templates": {
     "project": {
