@@ -22,8 +22,8 @@ variables:
   {%- endif %}
   CONTAINER_VARNISH_RELEASE_IMAGE: $CI_REGISTRY_IMAGE/varnish
   VERSION_NUMBER: 1
-  UV_VERSION: "0.5"
-  PYTHON_VERSION: "3.12"
+  UV_VERSION: "0.12.23"
+  PYTHON_VERSION: "3.14"
   BASE_LAYER: alpine
   # GitLab CI creates a separate mountpoint for the build directory,
   # so we need to copy instead of using hard links.
