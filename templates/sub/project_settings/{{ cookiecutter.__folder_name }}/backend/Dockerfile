@@ -20,8 +20,10 @@ RUN --mount=type=cache,target=/root/.cache \
         --no-editable
 
 RUN if [ -d /src/sources/cs.dxfeatured/src/cs ]; then \
-        mkdir -p /app/lib/python${PYTHON_VERSION}/site-packages/cs && \
-        cp -r /src/sources/cs.dxfeatured/src/cs/. /app/lib/python${PYTHON_VERSION}/site-packages/cs/; \
+        for sp in /app/lib/python*/site-packages; do \
+            mkdir -p "$sp/cs" && \
+            cp -r /src/sources/cs.dxfeatured/src/cs/. "$sp/cs/"; \
+        done; \
     fi
 
 # Move skeleton files to /app
