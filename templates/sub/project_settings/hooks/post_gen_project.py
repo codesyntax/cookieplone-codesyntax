@@ -143,9 +143,10 @@ def configure_repository_urls(
         except UnicodeDecodeError:
             continue
         new_text = badge.sub(f"{new_http}/badges/main/pipeline.svg", text)
-        new_text = new_text.replace(
-            f"{old_http}/actions/workflows/main.yml",
+        new_text = re.sub(
+            re.escape(old_http) + r"/actions/workflows/[^)\s]+",
             f"{new_http}/-/pipelines",
+            new_text,
         )
         new_text = new_text.replace(old_http, new_http)
         new_text = new_text.replace(old_git, new_git)
