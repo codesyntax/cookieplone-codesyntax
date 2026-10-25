@@ -2,27 +2,18 @@
 ARG PYTHON_VERSION={{ cookiecutter.__python_version }}
 FROM plone/server-builder:uv-${PYTHON_VERSION} AS builder
 
-# Install project dependencies based on uv.lock and pyproject.toml
-# We expect pyproject.toml to have an entry cointainer inside [dependency-groups]
-RUN --mount=type=cache,target=/root/.cache \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    --mount=type=ssh,id=default \
-    uv sync \
-        --locked \
-        --no-dev \
-        --no-group test \
-        --group container \
-        --no-install-project
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-client git && rm -rf /var/lib/apt/lists/*
 
 COPY . /src
 WORKDIR /src
 
 # Install package
 RUN --mount=type=cache,target=/root/.cache \
+    --mount=type=bind,source=mx.ini,target=mx.ini \
     --mount=type=ssh,id=default \
+    GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+    uv tool run mxdev[uv] -c mx.ini && \
     uv sync \
-        --locked \
         --no-dev \
         --no-group test \
         --group container \
