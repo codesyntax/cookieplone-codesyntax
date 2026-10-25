@@ -3,7 +3,7 @@ default:
   services:
     - docker:29-dind
   before_script:
-    - apk add --no-cache make bash python3 ncurses openssh-client-common
+    - apk add --no-cache make bash python3 ncurses openssh-client-common git jq
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
 
 stages:
@@ -58,7 +58,7 @@ check-backend:
   image: ghcr.io/astral-sh/uv:$UV_VERSION-python$PYTHON_VERSION-$BASE_LAYER
 
   before_script:
-    - apk add --no-cache make bash python3 ncurses openssh-client-common git
+    - apk add --no-cache make bash python3 ncurses openssh-client-common git jq
   script:
     - cd backend
     - make lint
@@ -72,8 +72,10 @@ check-frontend:
   image: node:lts-alpine
   stage: ctb
   before_script:
-    - apk add --no-cache make bash python3 ncurses openssh-client-common git
+    - apk add --no-cache make bash python3 ncurses openssh-client-common git jq curl
     - npm i -g corepack@latest && corepack enable
+    - curl -LsSf https://astral.sh/uv/install.sh | sh
+    - . "$HOME/.local/bin/env"
   script:
     - cd frontend
     - make install
@@ -91,7 +93,7 @@ test-backend:
     - check-backend
   image: ghcr.io/astral-sh/uv:$UV_VERSION-python$PYTHON_VERSION-$BASE_LAYER
   before_script:
-    - apk add --no-cache build-base make bash python3 ncurses openssh-client openssh-client-common git linux-headers
+    - apk add --no-cache build-base make bash python3 ncurses openssh-client openssh-client-common git linux-headers jq
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
     - touch ~/.ssh/config
@@ -102,6 +104,7 @@ test-backend:
     - echo "${DEPLOY_SSH_PRIVATE_KEY}" | tr -d '\r' | ssh-add - > /dev/null # add ssh k
   script:
     - cd backend
+    - make install
     - make test
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
@@ -115,8 +118,10 @@ test-frontend:
   needs:
     - check-frontend
   before_script:
-    - apk add --no-cache make bash python3 ncurses openssh-client-common git
+    - apk add --no-cache make bash python3 ncurses openssh-client-common git jq curl
     - npm i -g corepack@latest && corepack enable
+    - curl -LsSf https://astral.sh/uv/install.sh | sh
+    - . "$HOME/.local/bin/env"
 
   script:
     - cd frontend
@@ -133,7 +138,9 @@ build-backend:
   needs:
     - test-backend
   before_script:
-    - apk add --no-cache build-base make bash python3 curl ncurses openssh-client openssh-client-common
+    - apk add --no-cache build-base make bash python3 curl ncurses openssh-client openssh-client-common git jq curl
+    - curl -LsSf https://astral.sh/uv/install.sh | sh
+    - . "$HOME/.local/bin/env"
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
     - touch ~/.ssh/config
