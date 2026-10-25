@@ -1,7 +1,9 @@
 """Post generation hook."""
 
 import json
+import re
 from collections import OrderedDict
+from datetime import date
 from pathlib import Path
 
 from binaryornot.check import is_binary
@@ -20,6 +22,64 @@ POST_GEN_TO_REMOVE: dict[str, list[str]] = {
 }
 
 TEMPLATES_FOLDER: str = "templates"
+
+
+def configure_repoplone_release(context: OrderedDict, *args: tuple, **kwargs: dict):
+    """Configure the repoplone release pipeline used by GitLab CI.
+
+    GitLab projects do not have a GitHub release to create, so the
+    `gh_release` step is omitted. The `git` step is also omitted: the CI job
+    commits and pushes only after the container images have been promoted, so
+    a failed image push does not leave a published tag behind.
+    """
+    path = Path("repository.toml")
+    if not path.is_file():
+        return
+
+    content = path.read_text()
+    if "[repository.release]" in content:
+        return
+
+    if not content.endswith("\n"):
+        content += "\n"
+    content += """
+[repository.release]
+steps = [
+    "changelog",
+    "version",
+    "repository",
+    "release_backend",
+    "release_frontend",
+]
+"""
+    path.write_text(content)
+
+
+def set_initial_calver_version(context: OrderedDict, *args: tuple, **kwargs: dict):
+    """Seed version.txt with today's date when the repository uses calver.
+
+    The project template ships a semver seed (``__version_package``). With
+    calver, repoplone expects a value like ``YYYYMMDD.N`` so the first release
+    becomes ``YYYYMMDD.1`` instead of a semver-derived value.
+    """
+    repository_path = Path("repository.toml")
+    version_path = Path("version.txt")
+    if not (repository_path.is_file() and version_path.is_file()):
+        return
+
+    repository_content = repository_path.read_text()
+    if not re.search(
+        r'^\s*version_format\s*=\s*"calver"\s*$', repository_content, re.MULTILINE
+    ):
+        return
+
+    current_version = version_path.read_text().strip()
+    seed_version = str(context.get("__version_package", "")).strip()
+    if seed_version and current_version != seed_version:
+        # Do not overwrite a version that was already released or managed.
+        return
+
+    version_path.write_text(date.today().strftime("%Y%m%d") + ".0\n")
 
 
 def modify_pyprojecttoml_dependency(context: OrderedDict, *args: tuple, **kwargs: dict):
@@ -65,6 +125,16 @@ def action_handlers(context: OrderedDict) -> list[post_gen.PostGenAction]:
         {
             "handler": modify_pyprojecttoml_dependency,
             "title": "Modify pyproject.toml dependencies",
+            "enabled": True,
+        },
+        {
+            "handler": configure_repoplone_release,
+            "title": "Configure repoplone release pipeline",
+            "enabled": True,
+        },
+        {
+            "handler": set_initial_calver_version,
+            "title": "Set initial calver version",
             "enabled": True,
         },
     ]
