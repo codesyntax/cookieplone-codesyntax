@@ -2,7 +2,7 @@
 ARG PYTHON_VERSION={{ cookiecutter.__python_version }}
 FROM plone/server-builder:uv-${PYTHON_VERSION} AS builder
 
-RUN apt-get update && apt-get install -y --no-install-recommends openssh-client git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-client git swig libssl-dev && rm -rf /var/lib/apt/lists/*
 
 COPY . /src
 WORKDIR /src
@@ -18,6 +18,11 @@ RUN --mount=type=cache,target=/root/.cache \
         --no-group test \
         --group container \
         --no-editable
+
+RUN if [ -d /src/sources/cs.dxfeatured/cs ]; then \
+        mkdir -p /app/lib/python${PYTHON_VERSION}/site-packages/cs && \
+        cp -r /src/sources/cs.dxfeatured/cs/. /app/lib/python${PYTHON_VERSION}/site-packages/cs/; \
+    fi
 
 # Move skeleton files to /app
 RUN <<EOT

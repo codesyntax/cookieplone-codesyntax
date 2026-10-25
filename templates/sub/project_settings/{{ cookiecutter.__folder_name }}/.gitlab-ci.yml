@@ -139,7 +139,7 @@ test-backend:
       optional: true
   rules: !reference [.rules-backend, rules]
   before_script:
-    - apk add --no-cache build-base make bash python3 ncurses openssh-client openssh-client-common git linux-headers jq
+    - apk add --no-cache build-base make bash python3 ncurses openssh-client openssh-client-common git linux-headers jq swig openssl-dev
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
     - touch ~/.ssh/config
