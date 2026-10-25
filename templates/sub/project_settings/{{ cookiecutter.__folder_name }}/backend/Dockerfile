@@ -26,6 +26,13 @@ RUN if [ -d /src/sources/cs.dxfeatured/src/cs ]; then \
         done; \
     fi
 
+RUN for d in \
+        /app/lib/python*/site-packages/ftw_blueprints-*.dist-info \
+        /app/lib/python*/site-packages/collective_blueprint_jsonmigrator-*.dist-info \
+        /app/lib/python*/site-packages/collective.jsonmigrator-*.dist-info; do \
+        if [ -f "$d/entry_points.txt" ]; then rm -f "$d/entry_points.txt"; fi; \
+    done
+
 # Move skeleton files to /app
 RUN <<EOT
     mv /app_skeleton/* /app
