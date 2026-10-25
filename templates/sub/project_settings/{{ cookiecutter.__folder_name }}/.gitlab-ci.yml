@@ -1,76 +1,124 @@
 default:
   image: docker:29
-  services:
-    - docker:29-dind
-  before_script:
-    - apk add --no-cache make bash python3 ncurses openssh-client-common git jq
-    - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
+  interruptible: true
+  cache:
+    key: "$CI_JOB_NAME"
+    paths:
+      - .uv-cache
+      - .npm
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
 
 stages:
-  - ctb
-  - bump
+  - check
+  - build
   - release
-#  - deploy
 
 variables:
   # Use TLS https://docs.gitlab.com/ee/ci/docker/using_docker_build.html#tls-enabled
-  # DOCKER_HOST: tcp://docker:2376
   DOCKER_TLS_CERTDIR: "/certs"
-  CONTAINER_BACKEND_RELEASE_IMAGE: $CI_REGISTRY_IMAGE/backend
-  {%- if cookiecutter.feature_headless %}
-  CONTAINER_FRONTEND_RELEASE_IMAGE: $CI_REGISTRY_IMAGE/frontend
-  {%- endif %}
-  CONTAINER_VARNISH_RELEASE_IMAGE: $CI_REGISTRY_IMAGE/varnish
-  VERSION_NUMBER: 1
-  UV_VERSION: "0.13.5"
-  PYTHON_VERSION: "3.13"
-  BASE_LAYER: alpine
-  # GitLab CI creates a separate mountpoint for the build directory,
-  # so we need to copy instead of using hard links.
+  TERM: xterm-256color
   UV_LINK_MODE: copy
+  UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
+  npm_config_cache: "$CI_PROJECT_DIR/.npm"
+  # Images are always built with an immutable tag first. Only the release job
+  # promotes them to a version and to `latest`.
+  IMAGE_TAG: "sha-$CI_COMMIT_SHORT_SHA"
+  CONTAINER_BACKEND_IMAGE: "$CI_REGISTRY_IMAGE/backend"
+  UV_VERSION: "0.13.5"
+  PYTHON_VERSION: "{{ cookiecutter.__python_version }}"
+  PLONE_VERSION: "{{ cookiecutter.plone_version }}"
+  BASE_LAYER: alpine
+  {%- if cookiecutter.feature_headless %}
+  CONTAINER_FRONTEND_IMAGE: "$CI_REGISTRY_IMAGE/frontend"
+  NODE_VERSION: "{{ cookiecutter.__node_version }}"
+  {%- endif %}
+
+.rules-backend:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - backend/**/*
+        - repository.toml
+        - .gitlab-ci.yml
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+{%- if cookiecutter.feature_headless %}
+
+.rules-frontend:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - frontend/**/*
+        - repository.toml
+        - .gitlab-ci.yml
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+{%- endif %}
+
+.rules-deploy:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - deploy/**/*
+        - .gitlab-ci.yml
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes:
+        - deploy/**/*
+        - .gitlab-ci.yml
 
 check-configuration:
-  stage: ctb
-  rules:
-  - changes:
-      - deploy/conf/**
-
-  image: alpine:latest
-
+  stage: check
+  image: alpine:3.22
+  services:
+    - docker:29-dind
+  rules: !reference [.rules-deploy, rules]
   before_script:
     - apk add --no-cache bash curl docker-cli gettext
   script:
     - cd deploy
 
     # test caddy
-    - cat ./conf/Caddyfile | docker run --rm -i caddy:latest caddy validate --adapter caddyfile --config -
+    # The generated Caddyfile has a placeholder password hash that Caddy
+    # cannot decode. Replace it with a valid bcrypt hash just for validation.
+    - >
+      CADDY_PASSWORD_HASH='$2a$14$Hz4Ki0sSjG1zFRPnln1Li.PL9TW.QNGUQ8N./g5dq4/65W3fofVF6';
+      sed "s|XXXXXXXXXXX|$CADDY_PASSWORD_HASH|g" ./conf/Caddyfile |
+      docker run --rm -i caddy:2-alpine caddy validate --adapter caddyfile --config -
 
     # test nginx
     - >
       docker run --rm
       -e SERVER_DOMAIN={{ cookiecutter.hostname }}
-      -v $(pwd)/conf/nginx-config-extra.conf:/etc/nginx/nginx-config-extra.conf:ro
-      -v $(pwd)/conf/default.conf.template:/etc/nginx/templates/default.conf.template
-      nginx nginx -t -c /etc/nginx/nginx.conf
+      --add-host backend:127.0.0.1
+      --add-host frontend:127.0.0.1
+      --add-host varnish-backend:127.0.0.1
+      --add-host varnish-frontend:127.0.0.1
+      --add-host thumbor:127.0.0.1
+      -v "$(pwd)/conf/nginx-config-extra.conf:/etc/nginx/conf/nginx-config-extra.conf:ro"
+      -v "$(pwd)/conf/default.conf.template:/etc/nginx/templates/default.conf.template:ro"
+      nginx:1.29-alpine nginx -t
 
 check-backend:
-  stage: ctb
+  stage: check
   image: ghcr.io/astral-sh/uv:$UV_VERSION-python$PYTHON_VERSION-$BASE_LAYER
-
+  rules: !reference [.rules-backend, rules]
   before_script:
     - apk add --no-cache make bash python3 ncurses openssh-client-common git jq
   script:
     - cd backend
     - make lint
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
-      changes:
-        - backend/**/*
+    # `make lint` runs `ruff --fix`: fail if it had to change anything.
+    - git diff --exit-code
 
 {%- if cookiecutter.feature_headless %}
+
 check-frontend:
-  image: node:lts-alpine
-  stage: ctb
+  stage: check
+  image: node:${NODE_VERSION}-alpine
+  rules: !reference [.rules-frontend, rules]
   before_script:
     - apk add --no-cache make bash python3 ncurses openssh-client-common git jq curl
     - npm i -g corepack@latest && corepack enable
@@ -81,236 +129,261 @@ check-frontend:
     - make install
     - make lint
     - make ci-i18n
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
-      changes:
-        - frontend/**/*
 {%- endif %}
 
 test-backend:
-  stage: ctb
-  needs:
-    - check-backend
+  stage: check
   image: ghcr.io/astral-sh/uv:$UV_VERSION-python$PYTHON_VERSION-$BASE_LAYER
+  needs:
+    - job: check-backend
+      optional: true
+  rules: !reference [.rules-backend, rules]
   before_script:
     - apk add --no-cache build-base make bash python3 ncurses openssh-client openssh-client-common git linux-headers jq
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
     - touch ~/.ssh/config
-    - 'echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config'
+    - 'echo -e "Host *\n\tStrictHostKeyChecking accept-new\n\tUserKnownHostsFile ~/.ssh/known_hosts\n\n" > ~/.ssh/config'
     # We need this in case we are using private repos to host packages
     # added in the mx.ini, otherwise CI/CD can't access those packages
     - eval `ssh-agent -s`
-    - echo "${DEPLOY_SSH_PRIVATE_KEY}" | tr -d '\r' | ssh-add - > /dev/null # add ssh k
+    - if [ -n "${DEPLOY_SSH_PRIVATE_KEY:-}" ]; then echo "${DEPLOY_SSH_PRIVATE_KEY}" | tr -d '\r' | ssh-add - > /dev/null; fi
   script:
     - cd backend
     - make install
     - make test
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
-      changes:
-        - backend/**/*
 
 {%- if cookiecutter.feature_headless %}
+
 test-frontend:
-  image: node:lts-alpine
-  stage: ctb
+  stage: check
+  image: node:${NODE_VERSION}-alpine
   needs:
-    - check-frontend
+    - job: check-frontend
+      optional: true
+  rules: !reference [.rules-frontend, rules]
   before_script:
     - apk add --no-cache make bash python3 ncurses openssh-client-common git jq curl
     - npm i -g corepack@latest && corepack enable
     - curl -LsSf https://astral.sh/uv/install.sh | sh
     - . "$HOME/.local/bin/env"
-
   script:
     - cd frontend
     - make install
     - make ci-test
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
-      changes:
-        - frontend/**/*
 {%- endif %}
 
 build-backend:
-  stage: ctb
+  stage: build
+  services:
+    - docker:29-dind
   needs:
-    - test-backend
+    - job: test-backend
+      optional: true
+  rules: !reference [.rules-backend, rules]
   before_script:
-    - apk add --no-cache build-base make bash python3 curl ncurses openssh-client openssh-client-common git jq curl
+    - apk add --no-cache build-base make bash python3 curl ncurses openssh-client openssh-client-common git jq
     - curl -LsSf https://astral.sh/uv/install.sh | sh
     - . "$HOME/.local/bin/env"
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
     - touch ~/.ssh/config
-    - 'echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config'
+    - 'echo -e "Host *\n\tStrictHostKeyChecking accept-new\n\tUserKnownHostsFile ~/.ssh/known_hosts\n\n" > ~/.ssh/config'
     # We need this in case we are using private repos to host packages
     # added in the mx.ini, otherwise CI/CD can't access those packages
     - eval `ssh-agent -s`
-    - echo "${DEPLOY_SSH_PRIVATE_KEY}" | tr -d '\r' | ssh-add - > /dev/null # add ssh k
-    # We need to manually install `uv` because the base docker image doesn't have it
-    - curl -LsSf https://astral.sh/uv/install.sh | sh
-    - source $HOME/.local/bin/env
-
+    - if [ -n "${DEPLOY_SSH_PRIVATE_KEY:-}" ]; then echo "${DEPLOY_SSH_PRIVATE_KEY}" | tr -d '\r' | ssh-add - > /dev/null; fi
   script:
-    - set -e # Stop if the execution of any command fails
+    - set -e
     - cd backend
-    - make build-image
-    - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
-    - docker push $CONTAINER_BACKEND_RELEASE_IMAGE:latest
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
-      changes:
-        - backend/**/*
+    # Override the image name computed by the Makefile so it matches the
+    # registry path used by the deployment stack.
+    - make build-image IMAGE_NAME="$CONTAINER_BACKEND_IMAGE:$IMAGE_TAG"
+    - |
+      smoke_test_backend() {
+        image="$1"
+        container="smoke-backend-$$"
+        docker rm -f "$container" >/dev/null 2>&1 || true
+        docker run -d --name "$container" --tmpfs /data:rw,mode=1777 "$image" >/dev/null
+        trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+
+        ready=0
+        i=0
+        while [ "$i" -lt 90 ]; do
+          if docker exec "$container" /app/bin/python -c 'import urllib.request; body = urllib.request.urlopen("http://127.0.0.1:8080/ok", timeout=5).read(); assert body.strip() == b"OK"' >/dev/null 2>&1; then
+            ready=1
+            break
+          fi
+          if [ "$(docker inspect "$container" | jq -r '.[0].State.Running // false')" != "true" ]; then
+            break
+          fi
+          i=$((i + 1))
+          sleep 2
+        done
+
+        if [ "$ready" -ne 1 ]; then
+          echo "ERROR: backend image did not become ready"
+          docker logs "$container" || true
+          docker rm -f "$container" >/dev/null 2>&1 || true
+          trap - EXIT
+          return 1
+        fi
+
+        if ! docker exec -e EXPECTED_PLONE_VERSION="$PLONE_VERSION" "$container" /app/bin/python -c 'import os; from packaging.version import Version; import Products.CMFPlone; actual = Version(Products.CMFPlone.__version__); expected = Version(os.environ["EXPECTED_PLONE_VERSION"]); assert actual.release[:2] == expected.release[:2], f"expected Plone {expected.release[:2]}, got {actual}"; print(f"Plone version: {actual}")'; then
+          echo "ERROR: backend image does not contain the expected Plone version (${PLONE_VERSION})"
+          docker logs "$container" || true
+          docker rm -f "$container" >/dev/null 2>&1 || true
+          trap - EXIT
+          return 1
+        fi
+
+        echo "Backend image started correctly"
+        docker rm -f "$container" >/dev/null 2>&1 || true
+        trap - EXIT
+      }
+      smoke_test_backend "$CONTAINER_BACKEND_IMAGE:$IMAGE_TAG"
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then
+        echo "$CI_JOB_TOKEN" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+        docker push "$CONTAINER_BACKEND_IMAGE:$IMAGE_TAG"
+      else
+        echo "Merge request pipeline: image built but not pushed."
+      fi
 
 {%- if cookiecutter.feature_headless %}
-build-frontend:
-  stage: ctb
-  needs:
-    - test-frontend
-  before_script:
-    - apk add --no-cache make bash python3 ncurses openssh-client-common
 
+build-frontend:
+  stage: build
+  services:
+    - docker:29-dind
+  needs:
+    - job: test-frontend
+      optional: true
+  rules: !reference [.rules-frontend, rules]
+  before_script:
+    - apk add --no-cache make bash python3 ncurses openssh-client-common git jq curl
+    - npm i -g corepack@latest && corepack enable
+    - curl -LsSf https://astral.sh/uv/install.sh | sh
+    - . "$HOME/.local/bin/env"
   script:
-    - set -e # Stop if the execution of any command fails
+    - set -e
     - cd frontend
-    - make build-image
-    - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
-    - docker push $CONTAINER_FRONTEND_RELEASE_IMAGE:latest
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
-      changes:
-        - frontend/**/*
+    # The Dockerfile is provided by the Volto core checkout. Materialize it if
+    # this build job did not run `make install` (other CI jobs use their own
+    # workspace).
+    - test -f Dockerfile || make install
+    # Override the image name computed by the Makefile so it matches the
+    # registry path used by the deployment stack.
+    - make build-image IMAGE_NAME="$CONTAINER_FRONTEND_IMAGE" IMAGE_TAG="$IMAGE_TAG"
+    - |
+      smoke_test_frontend() {
+        image="$1"
+        container="smoke-frontend-$$"
+        docker rm -f "$container" >/dev/null 2>&1 || true
+        docker run -d --name "$container" \
+          -e RAZZLE_INTERNAL_API_PATH=http://127.0.0.1:8080/Plone \
+          "$image" >/dev/null
+        trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+
+        ready=0
+        i=0
+        while [ "$i" -lt 90 ]; do
+          if docker exec "$container" node -e 'const net = require("net"); const socket = net.connect(3000, "127.0.0.1"); socket.on("connect", () => { socket.end(); process.exit(0); }); socket.on("error", () => process.exit(1)); setTimeout(() => process.exit(1), 2000);' >/dev/null 2>&1; then
+            ready=1
+            break
+          fi
+          if [ "$(docker inspect "$container" | jq -r '.[0].State.Running // false')" != "true" ]; then
+            break
+          fi
+          i=$((i + 1))
+          sleep 2
+        done
+
+        if [ "$ready" -ne 1 ]; then
+          echo "ERROR: frontend image did not become ready"
+          docker logs "$container" || true
+          docker rm -f "$container" >/dev/null 2>&1 || true
+          trap - EXIT
+          return 1
+        fi
+
+        echo "Frontend image started correctly"
+        docker rm -f "$container" >/dev/null 2>&1 || true
+        trap - EXIT
+      }
+      smoke_test_frontend "$CONTAINER_FRONTEND_IMAGE:$IMAGE_TAG"
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then
+        echo "$CI_JOB_TOKEN" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+        docker push "$CONTAINER_FRONTEND_IMAGE:$IMAGE_TAG"
+      else
+        echo "Merge request pipeline: image built but not pushed."
+      fi
 {%- endif %}
 
-
-bump-version:
-  image: node:lts-alpine
-  rules:
-    - if: $CI_COMMIT_REF_NAME == "main"
-  stage: bump
-  before_script:
-    # install basic packages
-    - apk add --no-cache make bash python3 ncurses openssh-client openssh-client-common git
-    # Git dance
-    - eval `ssh-agent -s`
-    - echo "${DEPLOY_SSH_PRIVATE_KEY}" | tr -d '\r' | ssh-add - > /dev/null # add ssh key
-    # create ssh configuration to disable host checking when pushing
-    - mkdir -p ~/.ssh
-    - chmod 700 ~/.ssh
-    - touch ~/.ssh/config
-    - 'echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config'
-    # Configure git
-    - git config --global user.name "${CI_GITLAB_USERNAME}"
-    - git config --global user.email "${CI_GITLAB_USER_EMAIL}"
-    # Get git repo URL using ssh syntax
-    - export CI_PUSH_REPO=$(echo "$CI_REPOSITORY_URL" | sed -e "s|.*@\(.*\)|git@\1|" -e "s|/|:/|" )
-    - git remote set-url --push origin "ssh://${CI_PUSH_REPO}"
-    - git checkout -B $CI_COMMIT_REF_NAME
-    - git pull origin $CI_COMMIT_REF_NAME
-    - git push origin -u $CI_COMMIT_REF_NAME -o ci.skip
-  script:
-    # Install npm required packages
-    - npm i -D @release-it/conventional-changelog@10.0.0 @release-it/bumper@7.0.0
-    - npx release-it -y --ci
-    # - git push origin $CI_COMMIT_REF_NAME -u -o ci.skip
-
-build-and-release:
-  rules:
-    - if: $CI_COMMIT_REF_NAME == "main"
+release:
   stage: release
+  interruptible: false
+  resource_group: "$CI_PROJECT_PATH-release"
+  variables:
+    GIT_DEPTH: "0"
+  services:
+    - docker:29-dind
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+  needs:
+    - build-backend
+    - job: check-configuration
+      optional: true
+    {%- if cookiecutter.feature_headless %}
+    - build-frontend
+    {%- endif %}
   before_script:
-    # install basic packages
-    - apk add --no-cache make bash python3 ncurses openssh-client openssh-client-common git
-    # Git dance
-    - eval `ssh-agent -s`
-    - echo "${DEPLOY_SSH_PRIVATE_KEY}" | tr -d '\r' | ssh-add - > /dev/null # add ssh key
-    # create ssh configuration to disable host checking when pushing
+    - apk add --no-cache make bash python3 curl ncurses openssh-client openssh-client-common git jq
+    - curl -LsSf https://astral.sh/uv/install.sh | sh
+    - . "$HOME/.local/bin/env"
+    - git config --global user.name "${CI_GITLAB_USERNAME}"
+    - git config --global user.email "${CI_GITLAB_USER_EMAIL}"
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
     - touch ~/.ssh/config
-    - 'echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config'
-    # Configure git
-    - git config --global user.name "${CI_GITLAB_USERNAME}"
-    - git config --global user.email "${CI_GITLAB_USER_EMAIL}"
-    # Get git repo URL using ssh syntax
-    - export CI_PUSH_REPO=$(echo "$CI_REPOSITORY_URL" | sed -e "s|.*@\(.*\)|git@\1|" -e "s|/|:/|" )
-    - git remote set-url --push origin "ssh://${CI_PUSH_REPO}"
-    - git checkout -B $CI_COMMIT_REF_NAME
-    - git pull origin $CI_COMMIT_REF_NAME
-    - git push origin -u $CI_COMMIT_REF_NAME -o ci.skip
-    - export VERSION_NUMBER=$(cat version.txt)
+    - 'echo -e "Host *\n\tStrictHostKeyChecking accept-new\n\tUserKnownHostsFile ~/.ssh/known_hosts\n\n" > ~/.ssh/config'
+    - eval `ssh-agent -s`
+    - if [ -n "${DEPLOY_SSH_PRIVATE_KEY:-}" ]; then echo "${DEPLOY_SSH_PRIVATE_KEY}" | tr -d '\r' | ssh-add - > /dev/null; fi
+    # Repoplone pushes through the SSH URL. The checkout URL uses the CI job
+    # token, so only the push URL needs to be replaced.
+    - git remote set-url --push origin "git@${CI_SERVER_HOST}:${CI_PROJECT_PATH}.git"
   script:
-    - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
-    # tag and release backend
-    - docker pull $CONTAINER_BACKEND_RELEASE_IMAGE:latest
-    - docker tag $CONTAINER_BACKEND_RELEASE_IMAGE:latest $CONTAINER_BACKEND_RELEASE_IMAGE:$VERSION_NUMBER
-    - docker push $CONTAINER_BACKEND_RELEASE_IMAGE:$VERSION_NUMBER
+    - set -e
+    # Repoplone updates the changelog, version.txt, backend/frontend versions
+    # and compose files. It does not commit or tag: the release steps configured
+    # in repository.toml exclude both `git` and `gh_release`.
+    - |
+      set +o pipefail
+      yes '' | uvx repoplone release next
+      set -o pipefail
+    - VERSION=$(head -n 1 version.txt)
+    - test -n "$VERSION"
+    - echo "Releasing version ${VERSION}"
+    - echo "$CI_JOB_TOKEN" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    # Promote the immutable image built for this commit to the release version
+    # before publishing the git tag.
+    - docker pull "$CONTAINER_BACKEND_IMAGE:$IMAGE_TAG"
+    - docker tag "$CONTAINER_BACKEND_IMAGE:$IMAGE_TAG" "$CONTAINER_BACKEND_IMAGE:$VERSION"
+    - docker tag "$CONTAINER_BACKEND_IMAGE:$IMAGE_TAG" "$CONTAINER_BACKEND_IMAGE:latest"
+    - docker push "$CONTAINER_BACKEND_IMAGE:$VERSION"
+    - docker push "$CONTAINER_BACKEND_IMAGE:latest"
     {%- if cookiecutter.feature_headless %}
-    # tag and release frontend
-    - docker pull $CONTAINER_FRONTEND_RELEASE_IMAGE:latest
-    - docker tag $CONTAINER_FRONTEND_RELEASE_IMAGE:latest $CONTAINER_FRONTEND_RELEASE_IMAGE:$VERSION_NUMBER
-    - docker push $CONTAINER_FRONTEND_RELEASE_IMAGE:$VERSION_NUMBER
+    - docker pull "$CONTAINER_FRONTEND_IMAGE:$IMAGE_TAG"
+    - docker tag "$CONTAINER_FRONTEND_IMAGE:$IMAGE_TAG" "$CONTAINER_FRONTEND_IMAGE:$VERSION"
+    - docker tag "$CONTAINER_FRONTEND_IMAGE:$IMAGE_TAG" "$CONTAINER_FRONTEND_IMAGE:latest"
+    - docker push "$CONTAINER_FRONTEND_IMAGE:$VERSION"
+    - docker push "$CONTAINER_FRONTEND_IMAGE:latest"
     {%- endif %}
-
-
-# deploy:
-#   stage: deploy
-#   rules:
-#     - if: $CI_COMMIT_TAG
-#   script:
-#     - mkdir -p ~/.ssh/
-#     - touch ~/.ssh/known_hosts
-#     - echo "$SSH_KNOWN_HOSTS" >> ~/.ssh/known_hosts
-#     - chmod 644 ~/.ssh/known_hosts
-#     - cd devops
-#     - eval `ssh-agent -s`
-#     - echo "${DEPLOY_SSH_PRIVATE_KEY}" | tr -d '\r' | ssh-add - > /dev/null # add ssh key
-#     - export TERM=dumb
-#     - export VERSION_NUMBER=$(cat version.txt)
-#     - touch .env
-#     - 'echo "DEPLOY_ENV=${DEPLOY_ENV}" >> .env'
-#     - 'echo "DEPLOY_HOST=${DEPLOY_HOST}" >> .env'
-#     - 'echo "DEPLOY_PORT=${DEPLOY_PORT}" >> .env'
-#     - 'echo "DEPLOY_USER=${DEPLOY_USER}" >> .env'
-#     - 'echo "DOCKER_CONFIG=${DOCKER_CONFIG}" >> .env'
-#     - 'echo "STACK_NAME=${STACK_NAME}" >> .env'
-#     - 'echo "STACK_PARAM=${VERSION_NUMBER}" >> .env'
-#     # Force using the environment variables, because .env file contents are not taken by docker stack deploy
-#     - export $(cat .env)
-#     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
-#     - make docker-setup
-#     - make stack-deploy
-#   environment: production
-# deploy-with-auxiliary-docker-image:
-#   stage: deploy
-#   variables:
-#     REGISTRY: ${CI_REGISTRY}
-#     USERNAME: ${CI_REGISTRY_USER}
-#     PASSWORD: ${CI_REGISTRY_PASSWORD}
-#     REMOTE_HOST: ${DEPLOY_HOST}
-#     REMOTE_PORT: ${DEPLOY_PORT}
-#     REMOTE_USER: ${DEPLOY_USER}
-#     REMOTE_PRIVATE_KEY: "${DEPLOY_SSH_PRIVATE_KEY}"
-#     STACK_FILE: devops/stacks/${DEPLOY_HOST}.yml
-#     STACK_NAME: ${STACK_NAME}
-#     DEPLOY_IMAGE: ghcr.io/kitconcept/docker-stack-deploy:latest
-#   script:
-#     - docker pull ${DEPLOY_IMAGE}
-#     - docker run --rm
-#       -v "$(pwd)":/github/workspace
-#       -v /var/run/docker.sock:/var/run/docker.sock
-#       -e REGISTRY=${REGISTRY}
-#       -e USERNAME=${USERNAME}
-#       -e PASSWORD=${PASSWORD}
-#       -e REMOTE_HOST=${REMOTE_HOST}
-#       -e REMOTE_PORT=${REMOTE_PORT}
-#       -e REMOTE_USER=${REMOTE_USER}
-#       -e REMOTE_PRIVATE_KEY="${REMOTE_PRIVATE_KEY}"
-#       -e STACK_FILE=${STACK_FILE}
-#       -e STACK_NAME=${STACK_NAME}
-#       ${DEPLOY_IMAGE}
-#   only:
-#     - main
-#   environment: production
+    # Publish the version bump and tag only after the images are available.
+    # `-u` stages only files already tracked by git (not the CI cache folders).
+    - git add -u
+    - git commit -m "Release ${VERSION}"
+    - git tag "${VERSION}"
+    - git push -o ci.skip origin "HEAD:${CI_DEFAULT_BRANCH}"
+    - git push origin "${VERSION}"
