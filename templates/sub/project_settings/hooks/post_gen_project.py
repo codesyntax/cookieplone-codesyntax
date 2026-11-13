@@ -9,6 +9,7 @@ from pathlib import Path
 from binaryornot.check import is_binary
 from cookieplone import generator
 from cookieplone.utils import console, npm, plone, post_gen
+from cookieplone.utils.cookiecutter import create_jinja_env
 from cookieplone.utils.subtemplates import run_subtemplates
 
 context: OrderedDict = {{cookiecutter}}
@@ -161,6 +162,118 @@ def configure_repository_urls(
             path.write_text(new_text)
 
 
+UPSTREAM_HOOK = (
+    Path("templates")
+    / "sub"
+    / "project_settings"
+    / "hooks"
+    / "post_gen_project.py"
+)
+
+
+def upstream_actions(
+    context: OrderedDict, versions: dict
+) -> list[post_gen.PostGenAction]:
+    """Return the action handlers defined by the upstream project_settings hook."""
+    repos = [
+        Path(repo) for repo in context.get("__cookieplone_upstream_repos", []) or []
+    ]
+    for repo in repos:
+        hook = repo / UPSTREAM_HOOK
+        if not hook.is_file():
+            continue
+        env = create_jinja_env({"cookiecutter": context, "versions": versions})
+        source = env.from_string(hook.read_text()).render()
+        namespace: dict = {"__name__": "cookieplone_upstream_project_settings"}
+        exec(compile(source, str(hook), "exec"), namespace)  # noqa: S102
+        handler = namespace.get("action_handlers")
+        if handler is None:
+            msg = f"Upstream hook {hook} does not define action_handlers()"
+            raise RuntimeError(msg)
+        return handler(context)
+
+    if repos:
+        msg = (
+            f"Upstream project_settings hook not found at {UPSTREAM_HOOK} "
+            f"in {', '.join(str(repo) for repo in repos)}"
+        )
+        raise RuntimeError(msg)
+    return []
+
+
+MAKEFILE_ZOPE_INSTANCE_VERSION = "3.1.0"
+
+
+def patch_backend_makefile(context: OrderedDict, *args: tuple, **kwargs: dict):
+    """Apply CodeSyntax-specific changes on top of the upstream backend Makefile."""
+    path = Path("backend") / "Makefile"
+    if not path.is_file():
+        return
+
+    lines = path.read_text().splitlines(keepends=True)
+    for index, line in enumerate(lines):
+        if "cookiecutter-zope-instance" in line:
+            lines[index] = re.sub(
+                r"(-c )\d+(?:\.\d+)+",
+                rf"\g<1>{MAKEFILE_ZOPE_INSTANCE_VERSION}",
+                line,
+            )
+    content = "".join(lines)
+
+    content = content.replace("@docker build .", "@docker build --ssh default .")
+
+    required = ("@docker build --ssh default .",)
+    if not all(item in content for item in required):
+        msg = (
+            "Unable to patch backend/Makefile: upstream layout changed. "
+            "Review templates/sub/project_settings/hooks/post_gen_project.py."
+        )
+        raise RuntimeError(msg)
+
+    path.write_text(content)
+
+
+def patch_backend_dockerfile(context: OrderedDict, *args: tuple, **kwargs: dict):
+    """Apply CodeSyntax-specific changes on top of the upstream backend Dockerfile."""
+    path = Path("backend") / "Dockerfile"
+    if not path.is_file():
+        return
+
+    content = path.read_text()
+
+    if "apt-get update" not in content:
+        lines = content.splitlines(keepends=True)
+        for index, line in enumerate(lines):
+            if line.startswith("FROM ") and " AS builder" in line:
+                lines.insert(
+                    index + 1,
+                    "\nRUN apt-get update && apt-get install -y "
+                    "--no-install-recommends openssh-client git && "
+                    "rm -rf /var/lib/apt/lists/*\n",
+                )
+                break
+        content = "".join(lines)
+
+    if "--mount=type=ssh" not in content:
+        bind = "    --mount=type=bind,source=mx.ini,target=mx.ini \\\n"
+        ssh = (
+            "    --mount=type=ssh,id=default \\\n"
+            '    GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new '
+            '-o UserKnownHostsFile=/tmp/known_hosts" \\\n'
+        )
+        content = content.replace(bind, bind + ssh, 1)
+
+    required = ("apt-get update", "--mount=type=ssh")
+    if not all(item in content for item in required):
+        msg = (
+            "Unable to patch backend/Dockerfile: upstream layout changed. "
+            "Review templates/sub/project_settings/hooks/post_gen_project.py."
+        )
+        raise RuntimeError(msg)
+
+    path.write_text(content)
+
+
 def action_handlers(context: OrderedDict) -> list[post_gen.PostGenAction]:
     """Return action handlers."""
 
@@ -173,6 +286,16 @@ def action_handlers(context: OrderedDict) -> list[post_gen.PostGenAction]:
         {
             "handler": modify_pyprojecttoml_dependency,
             "title": "Modify pyproject.toml dependencies",
+            "enabled": True,
+        },
+        {
+            "handler": patch_backend_makefile,
+            "title": "Patch backend Makefile",
+            "enabled": True,
+        },
+        {
+            "handler": patch_backend_dockerfile,
+            "title": "Patch backend Dockerfile",
             "enabled": True,
         },
         {
@@ -198,8 +321,9 @@ def main():
     """Final fixes."""
     output_dir = Path().cwd()
 
-    # Action handlers
-    post_gen.run_post_gen_actions(context, output_dir, action_handlers(context))
+    # Compose the upstream project_settings actions with our own
+    actions = upstream_actions(context, versions) + action_handlers(context)
+    post_gen.run_post_gen_actions(context, output_dir, actions)
 
     msg = """
         [bold blue]{{ cookiecutter.title }}[/bold blue]
