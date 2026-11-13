@@ -1,4 +1,4 @@
-{{cookiecutter.hostname}}:443 {
+{$CADDY_DOMAIN}:443 {
 
     encode zstd gzip
 
@@ -25,7 +25,7 @@
     {%- endif %}
 
     # Set the backend server URL
-    reverse_proxy * http://nginx:80 {
+    reverse_proxy * http://{$CADDY_BACKEND}:{$CADDY_PORT} {
         header_up Host {http.request.host}
         header_up X-Forwarded-Proto {http.request.scheme}
         header_up X-Real-IP {remote}
@@ -48,11 +48,11 @@
 }
 
 # Adjust to remove the www or put it
-# {{cookiecutter.hostname}}:443 {
+# {$CADDY_DOMAIN}:443 {
 #
 #     tls certs@codesyntax.com {
 #         protocols tls1.2 tls1.3
 #     }
 #
-#     redir https://{{cookiecutter.hostname}}{uri}
+#     redir https://{$CADDY_DOMAIN}{uri}
 # }

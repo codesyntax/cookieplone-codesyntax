@@ -45,6 +45,9 @@ services:
     container_name: caddy
     restart: unless-stopped
     image: caddy
+    environment:
+      - CADDY_DOMAIN=${CADDY_DOMAIN}
+      - CADDY_BACKEND=${CADDY_BACKEND}
     ports:
       - 80:80
       - 443:443
@@ -65,7 +68,7 @@ services:
     depends_on:
       - backend
     environment:
-      RAZZLE_API_PATH: https://{{ cookiecutter.hostname }}
+      RAZZLE_API_PATH: https://${CADDY_DOMAIN}
       RAZZLE_INTERNAL_API_PATH: http://backend:8080/Plone
 
     image: {{ cookiecutter.__container_image_prefix }}/frontend:$VERSION
@@ -131,8 +134,6 @@ services:
       {%- if cookiecutter.feature_headless %}
       - frontend
       {%- endif %}
-    environment:
-      SERVER_DOMAIN: {{ cookiecutter.hostname }}
     image: nginx
     volumes:
       - ./conf/default.conf.template:/etc/nginx/templates/default.conf.template
