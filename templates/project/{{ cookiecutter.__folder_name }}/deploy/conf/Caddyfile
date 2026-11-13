@@ -48,7 +48,7 @@
 }
 
 # Adjust to remove the www or put it
-# {$CADDY_DOMAIN}:443 {
+# www.{$CADDY_DOMAIN}:443 {
 #
 #     tls certs@codesyntax.com {
 #         protocols tls1.2 tls1.3
