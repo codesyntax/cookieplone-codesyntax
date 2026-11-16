@@ -56,6 +56,34 @@ steps = [
     path.write_text(content)
 
 
+def use_plone_base_package(context: OrderedDict, *args: tuple, **kwargs: dict):
+    """Use the Plone metapackage as the backend base package.
+
+    repoplone resolves ``backend.base_package_version`` from this value. Using
+    ``Plone`` keeps that resolution on the metapackage version instead of
+    ``Products.CMFPlone``.
+    """
+    path = Path("repository.toml")
+    if not path.is_file():
+        return
+
+    content = path.read_text()
+    if 'base_package = "Plone"' in content:
+        return
+    if 'base_package = "Products.CMFPlone"' not in content:
+        msg = (
+            "Unable to set backend base_package to Plone: repository.toml layout "
+            "changed. Review templates/sub/project_settings/hooks/post_gen_project.py."
+        )
+        raise RuntimeError(msg)
+    path.write_text(
+        content.replace(
+            'base_package = "Products.CMFPlone"',
+            'base_package = "Plone"',
+        )
+    )
+
+
 def set_initial_calver_version(context: OrderedDict, *args: tuple, **kwargs: dict):
     """Seed version.txt with today's date when the repository uses calver.
 
@@ -301,6 +329,11 @@ def action_handlers(context: OrderedDict) -> list[post_gen.PostGenAction]:
         {
             "handler": configure_repoplone_release,
             "title": "Configure repoplone release pipeline",
+            "enabled": True,
+        },
+        {
+            "handler": use_plone_base_package,
+            "title": "Use Plone as backend base package",
             "enabled": True,
         },
         {
