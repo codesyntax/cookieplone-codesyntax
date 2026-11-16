@@ -25,11 +25,9 @@
     {%- endif %}
 
     # Set the backend server URL
-    reverse_proxy * http://{$CADDY_BACKEND}:{$CADDY_PORT} {
+    reverse_proxy * http://{$CADDY_BACKEND}:{$CADDY_BACKEND_PORT} {
         header_up Host {http.request.host}
-        header_up X-Forwarded-Proto {http.request.scheme}
-        header_up X-Real-IP {remote}
-        header_up X-Forwarded-For {remote}
+        header_up X-Real-IP {client_ip}
     }
 
     # Logging (optional)
