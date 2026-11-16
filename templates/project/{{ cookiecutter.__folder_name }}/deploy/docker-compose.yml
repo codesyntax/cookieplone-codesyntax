@@ -33,7 +33,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-    image: {{ cookiecutter.__container_image_prefix }}/backend:$VERSION
+    image: {{ cookiecutter.__container_image_prefix }}/backend:${VERSION:-latest}
     ports:
       - 8080:8080
     logging:
@@ -71,7 +71,7 @@ services:
       RAZZLE_API_PATH: https://${CADDY_DOMAIN}
       RAZZLE_INTERNAL_API_PATH: http://backend:8080/Plone
 
-    image: {{ cookiecutter.__container_image_prefix }}/frontend:$VERSION
+    image: {{ cookiecutter.__container_image_prefix }}/frontend:${VERSION:-latest}
     logging:
       driver: loki
       options:
@@ -135,6 +135,8 @@ services:
       - frontend
       {%- endif %}
     image: nginx
+    environment:
+      SERVER_DOMAIN: ${CADDY_DOMAIN}
     volumes:
       - ./conf/default.conf.template:/etc/nginx/templates/default.conf.template
       - ./conf/nginx-config-extra.conf:/etc/nginx/conf/nginx-config-extra.conf

@@ -15,6 +15,11 @@ GREEN=`tput setaf 2`
 RESET=`tput sgr0`
 YELLOW=`tput setaf 3`
 
+# The image tag comes from the repository CalVer file. Exporting it makes every
+# `docker compose` command in this deploy directory use the released tag.
+VERSION ?= $(shell head -n 1 ../version.txt 2>/dev/null)
+export VERSION
+
 # Add the following 'help' target to your Makefile
 # And add help text after each target name starting with '\#\#'
 .PHONY: help
@@ -28,6 +33,10 @@ help-summary: ## Show the purpose of relevant commands (start, restart, stop, ..
 	@echo "Useful commands:"
 	@echo "----------------"
 	@grep -Eh '^[a-zA-Z_-]*(restart|start|status|stop)[a-zA-Z_-]*:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+.PHONY: version
+version: ## Show the image version used by docker compose
+	@echo "$(VERSION)"
 
 .PHONY: pull
 pull: ## git pull repo main branch
