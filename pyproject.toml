@@ -7,7 +7,7 @@ dependencies = []
 
 [dependency-groups]
 test = [
-    "cookieplone @ git+https://github.com/plone/cookieplone.git@issue-189-pytest-fixtures-extends",
+    "cookieplone @ git+https://github.com/plone/cookieplone.git@5000bf9d9f8d45112f0f60a62f3c89ea66ffc02d",
     "pytest",
 ]
 
