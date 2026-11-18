@@ -36,10 +36,6 @@ services:
     image: {{ cookiecutter.__container_image_prefix }}/backend:${VERSION:-latest}
     ports:
       - 8080:8080
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://prometheus.codesyntax.com:3100/loki/api/v1/push"
 
   caddy:
     container_name: caddy
@@ -57,10 +53,6 @@ services:
       - ./conf/Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_config:/config
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://prometheus.codesyntax.com:3100/loki/api/v1/push"
 
 {%- if cookiecutter.feature_headless %}
   frontend:
@@ -73,10 +65,6 @@ services:
       RAZZLE_INTERNAL_API_PATH: http://backend:8080/Plone
 
     image: {{ cookiecutter.__container_image_prefix }}/frontend:${VERSION:-latest}
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://prometheus.codesyntax.com:3100/loki/api/v1/push"
 {%- endif %}
 
 
@@ -141,10 +129,6 @@ services:
     volumes:
       - ./conf/default.conf.template:/etc/nginx/templates/default.conf.template
       - ./conf/nginx-config-extra.conf:/etc/nginx/conf/nginx-config-extra.conf
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://prometheus.codesyntax.com:3100/loki/api/v1/push"
 
   {%- if cookiecutter.devops_cache %}
     {%- if cookiecutter.feature_headless %}
@@ -189,10 +173,6 @@ services:
     volumes:
       - ./docker-crontab.txt:/crontab.txt:ro
       - /var/run/docker.sock:/var/run/docker.sock
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://prometheus.codesyntax.com:3100/loki/api/v1/push"
 
 volumes:
   caddy_config: null
