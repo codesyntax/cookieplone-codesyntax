@@ -1,6 +1,5 @@
 services:
 
-  {%- if cookiecutter.postgres %}
   postgres:
     # HINT:
     # - Using the postgres:17 image, you will have tsvector based search
@@ -28,6 +27,7 @@ services:
       postgres:
         condition: service_healthy
 
+  {%- if cookiecutter.postgres %}
   {%- if cookiecutter.thumbor %}
   thumbor:
     image: ghcr.io/bluedynamics/zodb-pgjsonb-thumborblobloader:0.4.2

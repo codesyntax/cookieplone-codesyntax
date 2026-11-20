@@ -10,9 +10,18 @@ default_context:
     db_storage: 'pgjsonb'
     db_pgjsonb_dsn: "dbname='zodb' user='zodb' password='zodb' host='localhost' port='5433'"
     db_pgjsonb_history_preserving: true
-
-    environment:
-      PGTHUMBOR_SECURITY_KEY: {{ cookiecutter.security_key }}
-      PGTHUMBOR_SERVER_URL: "http://thumbor.127.0.0.1.nip.io:8888"
     {%- endif %}
 
+    access_log_enabled: false
+    environment:
+        TZ: Europe/Madrid
+        PLONE_REGISTRY_YAML_CONTENT:
+            /Plone/portal_registry:
+                plone.smtp_host: "localhost"
+                plone.smtp_port: "25"
+                plone.smtp_userid: ""
+                plone.smtp_pass: ""
+        {%- if cookiecutter.postgres %}
+        PGTHUMBOR_SECURITY_KEY: {{ cookiecutter.security_key }}
+        PGTHUMBOR_SERVER_URL: "http://thumbor.127.0.0.1.nip.io:8888"
+        {%- endif %}
