@@ -156,6 +156,21 @@ services:
       - backend
   {%- endif %}
 
+  anubis:
+    image: codesyntax/anubis:latest
+    ports:
+      - "9090:9090" # (Optional) Metrics and Health checks
+      - "3000:3000"
+    environment:
+      - TARGET=${ANUBIS_BACKEND}:${ANUBIS_BACKEND_PORT}
+      - BIND=:3000
+      - POLICY_FNAME=/anubis-policy.yaml
+    volumes:
+      - ${ANUBIS_POLICY_FILE}:/anubis-policy.yaml:ro
+    depends_on:
+      - nginx
+
+
 #  scripts:
 #    profiles:
 #      - tools
