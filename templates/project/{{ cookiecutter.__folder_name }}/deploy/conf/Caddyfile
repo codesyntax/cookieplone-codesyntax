@@ -1,4 +1,4 @@
-{$CADDY_DOMAIN}:443 {
+{$SERVER_DOMAIN}:443 {
 
     encode zstd gzip
 
@@ -46,11 +46,11 @@
 }
 
 # Adjust to remove the www or put it
-# www.{$CADDY_DOMAIN}:443 {
+# www.{$SERVER_DOMAIN}:443 {
 #
 #     tls certs@codesyntax.com {
 #         protocols tls1.2 tls1.3
 #     }
 #
-#     redir https://{$CADDY_DOMAIN}{uri}
+#     redir https://{$SERVER_DOMAIN}{uri}
 # }

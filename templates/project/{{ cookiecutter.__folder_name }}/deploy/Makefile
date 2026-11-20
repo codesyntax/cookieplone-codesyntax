@@ -193,25 +193,25 @@ stop-cron-runner: ## Stop cron-runner
 # ---------------------------------------------------------------------------
 .PHONY: restart
 restart: ## Restart all services
-	docker compose restart
+	docker compose up -d --force-recreate
 
 .PHONY: restart-caddy
 restart-caddy: ## Restart caddy
-	docker compose restart caddy
+	docker compose up -d --force-recreate caddy
 
 .PHONY: restart-nginx
 restart-nginx: ## Restart nginx
-	docker compose restart nginx
+	docker compose up -d --force-recreate nginx
 
 .PHONY: restart-backend
 restart-backend: ## Restart backend
-	docker compose restart backend
+	docker compose up -d --force-recreate backend
 
 {%- if cookiecutter.feature_headless %}
 
 .PHONY: restart-frontend
 restart-frontend: ## Restart frontend
-	docker compose restart frontend
+	docker compose up -d --force-recreate frontend
 {%- endif %}
 
 {%- if cookiecutter.devops_cache %}
@@ -219,18 +219,18 @@ restart-frontend: ## Restart frontend
 
 .PHONY: restart-varnish-frontend
 restart-varnish-frontend: ## Restart varnish-frontend
-	docker compose restart varnish-frontend
+	docker compose up -d --force-recreate varnish-frontend
 {%- endif %}
 
 .PHONY: restart-varnish-backend
 restart-varnish-backend: ## Restart varnish-backend
-	docker compose restart varnish-backend
+	docker compose up -d --force-recreate varnish-backend
 
 .PHONY: restart-varnish
 restart-varnish: ## Restart all varnish services
-	docker compose restart varnish-backend
+	docker compose up -d --force-recreate varnish-backend
 	{%- if cookiecutter.feature_headless %}
-	docker compose restart varnish-frontend
+	docker compose up -d --force-recreate varnish-frontend
 	{%- endif %}
 {%- endif %}
 
@@ -238,28 +238,28 @@ restart-varnish: ## Restart all varnish services
 
 .PHONY: restart-postgres
 restart-postgres: ## Restart postgres
-	docker compose restart postgres
+	docker compose up -d --force-recreate postgres
 
 {%- if cookiecutter.thumbor %}
 
 .PHONY: restart-thumbor
 restart-thumbor: ## Restart thumbor
-	docker compose restart thumbor
+	docker compose up -d --force-recreate thumbor
 {%- endif %}
 {%- else %}
 
 .PHONY: restart-zeo
 restart-zeo: ## Restart zeo
-	docker compose restart zeo
+	docker compose up -d --force-recreate zeo
 {%- endif %}
 
 .PHONY: restart-anubis
 restart-anubis: ## Restart anubis
-	docker compose restart anubis
+	docker compose up -d --force-recreate anubis
 
 .PHONY: restart-cron-runner
 restart-cron-runner: ## Restart cron-runner
-	docker compose restart cron-runner
+	docker compose up -d --force-recreate cron-runner
 
 # ---------------------------------------------------------------------------
 # Logs

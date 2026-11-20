@@ -11,11 +11,11 @@ services:
     {%- endif %}
     environment:
     {%- if cookiecutter.postgres %}
-      ZODB_PGJSONB_DSN: dbname='${DB_NAME:-zodb}' user='${DB_USER:-zodb}' password='${DB_PASSWORD:-zodb}' host='${DB_HOST:-postgres}'
+      ZODB_PGJSONB_DSN: dbname='${DB_NAME:?DB_NAME is required}' user='${DB_USER:?DB_USER is required}' password='${DB_PASSWORD:?DB_PASSWORD is required}' host='${DB_HOST:?DB_HOST is required}'
       ZODB_PGJSONB_HISTORY_PRESERVING: true
       {%- if cookiecutter.thumbor %}
       PGTHUMBOR_SECURITY_KEY: {{ cookiecutter.security_key }}
-      PGTHUMBOR_SERVER_URL: https://{{cookiecutter.hostname}}/thumbor/
+      PGTHUMBOR_SERVER_URL: https://${SERVER_DOMAIN:?SERVER_DOMAIN is required}/thumbor/
       {%- endif %}
     {%- else %}
       ZEO_ADDRESS: zeo:8100
@@ -26,6 +26,7 @@ services:
       ZOPE_FORM_MEMFILE_LIMIT: 100MB
       CLIENT_HOME: /app/
       PLONE_REGISTRY_YAML: /plone-conf/plone.yml
+      TZ: Europe/Madrid
 
     volumes:
       - ./data/zeo:/data
@@ -33,7 +34,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-    image: {{ cookiecutter.__container_image_prefix }}/backend:${VERSION:-latest}
+    image: {{ cookiecutter.__container_image_prefix }}/backend:${VERSION:?VERSION is required}
     ports:
       - 8080:8080
 
@@ -42,9 +43,9 @@ services:
     restart: unless-stopped
     image: caddy
     environment:
-      - CADDY_DOMAIN=${CADDY_DOMAIN}
-      - CADDY_BACKEND=${CADDY_BACKEND}
-      - CADDY_BACKEND_PORT=${CADDY_BACKEND_PORT}
+      - SERVER_DOMAIN=${SERVER_DOMAIN:?SERVER_DOMAIN is required}
+      - CADDY_BACKEND=${CADDY_BACKEND:?CADDY_BACKEND is required}
+      - CADDY_BACKEND_PORT=${CADDY_BACKEND_PORT:?CADDY_BACKEND_PORT is required}
     ports:
       - 80:80
       - 443:443
@@ -61,10 +62,10 @@ services:
     depends_on:
       - backend
     environment:
-      RAZZLE_API_PATH: https://${CADDY_DOMAIN}
+      RAZZLE_API_PATH: https://${SERVER_DOMAIN:?SERVER_DOMAIN is required}
       RAZZLE_INTERNAL_API_PATH: http://backend:8080/Plone
 
-    image: {{ cookiecutter.__container_image_prefix }}/frontend:${VERSION:-latest}
+    image: {{ cookiecutter.__container_image_prefix }}/frontend:${VERSION:?VERSION is required}
 {%- endif %}
 
 
@@ -74,17 +75,18 @@ services:
     # - Using the postgres:17 image, you will have tsvector based search
     # - Using the tensorchord/vchord-suite:pg17-latest image, you will have BM25 ranking
     # You can set the value here or in the .env file
+    container_name: postgres
     image: ${PG_IMAGE:-postgres:17}
     environment:
-      POSTGRES_USER: zodb
-      POSTGRES_PASSWORD: zodb
-      POSTGRES_DB: zodb
+      POSTGRES_USER: ${DB_USER:?DB_USER is required}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_DB: ${DB_NAME:?DB_NAME is required}
     ports:
       - "5433:5432"
     volumes:
       - ./pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "zodb"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:?DB_USER is required}"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -92,14 +94,15 @@ services:
 
   {%- if cookiecutter.thumbor %}
   thumbor:
+    container_name: thumbor
     depends_on:
       - postgres
     image: ghcr.io/bluedynamics/zodb-pgjsonb-thumborblobloader:0.4.2
     environment:
-      PGTHUMBOR_DSN: "dbname=zodb user=zodb password=zodb host=postgres"
+      PGTHUMBOR_DSN: "dbname=${DB_NAME:?DB_NAME is required} user=${DB_USER:?DB_USER is required} password=${DB_PASSWORD:?DB_PASSWORD is required} host=${DB_HOST:?DB_HOST is required}"
       THUMBOR_SECURITY_KEY: "{{ cookiecutter.security_key }}"
       ALLOW_UNSAFE_URL: "True"
-      PGTHUMBOR_PLONE_AUTH_URL: "{{ cookiecutter.hostname }}"
+      PGTHUMBOR_PLONE_AUTH_URL: "${SERVER_DOMAIN:?SERVER_DOMAIN is required}"
       PGTHUMBOR_AUTH_CACHE_TTL: "60"
   {%- endif %}
 
@@ -125,7 +128,7 @@ services:
       {%- endif %}
     image: nginx
     environment:
-      SERVER_DOMAIN: ${CADDY_DOMAIN}
+      SERVER_DOMAIN: ${SERVER_DOMAIN:?SERVER_DOMAIN is required}
     volumes:
       - ./conf/default.conf.template:/etc/nginx/templates/default.conf.template
       - ./conf/nginx-config-extra.conf:/etc/nginx/conf/nginx-config-extra.conf
@@ -156,19 +159,21 @@ services:
       - backend
   {%- endif %}
 
-  anubis:
-    image: codesyntax/anubis:latest
-    ports:
-      - "9090:9090" # (Optional) Metrics and Health checks
-      - "3000:3000"
-    environment:
-      - TARGET=${ANUBIS_BACKEND}:${ANUBIS_BACKEND_PORT}
-      - BIND=:3000
-      - POLICY_FNAME=/anubis-policy.yaml
-    volumes:
-      - ${ANUBIS_POLICY_FILE}:/anubis-policy.yaml:ro
-    depends_on:
-      - nginx
+  # # Optional: Anubis runs standalone and is not part of the Caddy request path.
+  # anubis:
+  #   container_name: anubis
+  #   image: codesyntax/anubis:latest
+  #   ports:
+  #     - "9090:9090" # (Optional) Metrics and Health checks
+  #     - "3000:3000"
+  #   environment:
+  #     - TARGET=${ANUBIS_BACKEND:?ANUBIS_BACKEND is required}:${ANUBIS_BACKEND_PORT:?ANUBIS_BACKEND_PORT is required}
+  #     - BIND=:3000
+  #     - POLICY_FNAME=/anubis-policy.yaml
+  #   volumes:
+  #     - "${ANUBIS_POLICY_FILE:-./conf/anubis-standard.yaml}:/anubis-policy.yaml:ro"
+  #   depends_on:
+  #     - nginx
 
 
 #  scripts:
